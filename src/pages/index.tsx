@@ -1,57 +1,91 @@
 import Image from "next/future/image";
-import { HomeContainer, Product } from "../styles/pages/home";
+import { HomeContainer, Product, SliderContainer } from "../styles/pages/home";
 
-
-import { useKeenSlider } from 'keen-slider/react'
-
-import 'keen-slider/keen-slider.min.css'
 import { stripe } from "../lib/stripe";
 import { GetStaticProps } from "next";
 import Stripe from "stripe";
 import Link from "next/link";
 import Head from "next/head";
+import useEmblaCarousel from "embla-carousel-react";
+import { CartButton } from "../components/CartButton";
+import { useCart } from "../hooks/useCart";
+import { IProduct } from "../contexts/CartContext";
+import { MouseEvent, useEffect, useState } from "react";
+import { ProductSkeleton } from "../components/ProductSkeleton";
 
 interface HomeProps {
-  products: {
-    id: string
-    name: string
-    imageUrl: string
-    price: string
-  }[]
+  products: IProduct[]
 }
-
-
 export default function Home({ products }: HomeProps) {
-  const [sliderRef] = useKeenSlider({
-    slides: {
-      perView: 3,
-      spacing: 48
-    }
-  });
+  const [isLoading, setIsLoading] = useState(true)
+
+  const [emblaRef] = useEmblaCarousel({
+    align: "start",
+    skipSnaps: false,
+    dragFree: true,
+  })
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setIsLoading(false), 2000)
+
+    return () => clearTimeout(timeout)
+  }, [])
+
+  const { addToCart, checkIfItemAlreadyExists } = useCart()
+
+  function handleAddToCart(e: MouseEvent<HTMLButtonElement>, product: IProduct) {
+    e.preventDefault();
+    addToCart(product)
+  }
 
   return (
     <>
       <Head>
         <title>Home | Ignite Shop</title>
       </Head>
-      <HomeContainer ref={sliderRef} className="keen-slider">
-        {products.map((product) => {
-          return (
-            <Link key={product.id} href={`/product/${product.id}`} prefetch={false}>
-              <Product
-                className="keen-slider__slide"
-              >
-                <Image src={product.imageUrl} width={520} height={480} alt="" />
+      <div style={{ overflow: 'hidden', width: '100%' }}>
+        <HomeContainer className="keen-slider">
+          <div className="embla" ref={emblaRef}>
+            <SliderContainer className="embla__container container">
+              {isLoading ? (
+                <>
+                  <ProductSkeleton className="embla__slide" />
+                  <ProductSkeleton className="embla__slide" />
+                  <ProductSkeleton className="embla__slide" />
+                </>
+              ) : (
+                products.map((product) => {
+                  return (
+                    <Link key={product.id} href={`/product/${product.id}`} prefetch={false}>
+                      <Product
+                        className="embla__slide"
+                      >
+                        <Image src={product.imageUrl} width={520} height={480} alt="" />
 
-                <footer>
-                  <strong>{product.name}</strong>
-                  <span>{product.price}</span>
-                </footer>
-              </Product>
-            </Link>
-          )
-        })}
-      </HomeContainer>
+                        <footer>
+                          <div>
+                            <strong>{product.name}</strong>
+                            <span>{product.price}</span>
+                          </div>
+                          <CartButton
+                            color="green"
+                            size="large"
+                            onClick={(e) => handleAddToCart(e, product)}
+                            disabled={checkIfItemAlreadyExists(product.id)}
+                          />
+                        </footer>
+                      </Product>
+                    </Link>
+                  )
+                })
+
+              )}
+
+
+            </SliderContainer>
+          </div>
+        </HomeContainer>
+      </div>
     </>
   )
 }
@@ -71,7 +105,9 @@ export const getStaticProps: GetStaticProps = async () => {
       price: new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL'
-      }).format(productPrice / 100,)
+      }).format(productPrice / 100,),
+      numberPrice: productPrice / 100,
+      defaultPriceId: price.id
     }
   })
 

@@ -3,44 +3,28 @@ import Stripe from "stripe"
 import { stripe } from "../../lib/stripe"
 import Image from "next/future/image"
 import { ImageContainer, ProductContainer, ProductDetails } from "../../styles/pages/product"
-import axios from "axios"
 import { useState } from "react"
 import Head from "next/head"
+import { useCart } from "../../hooks/useCart"
+import { useRouter } from "next/router"
+import { IProduct } from "../../contexts/CartContext"
 
 interface ProductProps {
-  product: {
-    id: string
-    name: string
-    imageUrl: string
-    price: string
-    description: string;
-    defaultPriceId: string;
-  }
+  product: IProduct;
 }
 
 export default function Product({ product }: ProductProps) {
   const [isCreatingCheckoutSession, setIsCreatingCheckoutSession] = useState(false)
 
-  async function handleBuyProduct() {
-    try {
-      setIsCreatingCheckoutSession(true);
+  const { isFallback } = useRouter();
 
-      const response = await axios.post('/api/checkout', {
-        priceId: product.defaultPriceId,
-      })
+  const { addToCart, checkIfItemAlreadyExists } = useCart();
 
-      const { checkoutUrl } = response.data
-
-      // Para o caso de enviarmos o user para uma página interna, usariamos o hook useRouter com um router.push('/checkout')
-      // Como iremos enviar para uma página externa, no caso o Stripe, usamos como no javascript tradicional, com window.location.href
-      window.location.href = checkoutUrl
-
-    } catch (err) {
-      setIsCreatingCheckoutSession(false);
-      // Conectar com alguma ferramenta de observabilidade (Datadog / Sentry)
-      alert('Falha ao redirecionar ao checkout!')
-    }
+  if (isFallback) {
+    return <p>Loading...</p>;
   }
+
+  const itemAlreadyInCart = checkIfItemAlreadyExists(product.id);
 
   return (
     <>
@@ -58,8 +42,10 @@ export default function Product({ product }: ProductProps) {
 
           <p>{product.description}</p>
 
-          <button onClick={handleBuyProduct} disabled={isCreatingCheckoutSession}>
-            Comprar agora
+          <button onClick={() => addToCart(product)} disabled={itemAlreadyInCart}>
+            {itemAlreadyInCart
+              ? "Produto já está no carrinho"
+              : "Colocar na sacola"}
           </button>
         </ProductDetails>
       </ProductContainer>
@@ -96,6 +82,7 @@ export const getStaticProps: GetStaticProps<any, { id: string }> = async ({ para
           style: 'currency',
           currency: 'BRL'
         }).format(productPrice / 100,),
+        numberPrice: productPrice / 100,
         description: product.description,
         defaultPriceId: price.id,
       }
